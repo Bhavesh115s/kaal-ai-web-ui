@@ -1,20 +1,23 @@
 export function useTextToSpeech() {
-  const speak = async (text: string) => {
-    if (!text) return
+  const speak = (text: string) => {
+    if (!text || typeof window === "undefined") return
 
-    const res = await fetch("/api/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    })
+    const synth = window.speechSynthesis
+    synth.cancel() // 🔥 stop all previous voices
 
-    if (!res.ok) return
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = "en-IN"
+    u.rate = 0.9
+    u.pitch = 1
 
-    const audioBlob = await res.blob()
-    const audioUrl = URL.createObjectURL(audioBlob)
+    const voices = synth.getVoices()
+    const v =
+      voices.find(v => v.lang === "en-IN") ||
+      voices.find(v => v.lang.includes("en"))
 
-    const audio = new Audio(audioUrl)
-    audio.play()
+    if (v) u.voice = v
+
+    synth.speak(u)
   }
 
   return { speak }

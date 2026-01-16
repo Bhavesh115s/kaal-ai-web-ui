@@ -19,9 +19,6 @@ type Message = {
 
 type AIResponse = {
   acknowledgement: string
-  shloka: string
-  transliteration: string
-  meaning: string
   guidance: string
 }
 
@@ -43,7 +40,7 @@ export default function ChatPage() {
   // 🎙 STT
   const { recording, startRecording, stopRecording } = useSpeechToText()
 
-  // 🔊 TTS
+  // 🔊 TTS (ONLY HERE)
   const { speak } = useTextToSpeech()
 
   /* ===== AUTO SCROLL ===== */
@@ -68,7 +65,7 @@ export default function ChatPage() {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/chat`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/chat`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -87,28 +84,20 @@ export default function ChatPage() {
 
       setMessages((p) => [...p, aiMessage])
 
-      // 🔊 AI SPEAKS (important line)
-      speak(data.guidance || data.acknowledgement)
+      // ❌ AUTO SPEAK REMOVED (THIS WAS THE MAIN BUG)
+
     } catch {
       setMessages((p) => [
         ...p,
         {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content:
-            "I apologize. I am unable to connect to the wisdom source right now.",
+          content: "Sorry, I am unable to respond right now.",
           timestamp: new Date(),
         },
       ])
     } finally {
       setIsTyping(false)
-    }
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
     }
   }
 
@@ -119,58 +108,47 @@ export default function ChatPage() {
       <div className="flex-1 bg-background">
         <div className="container mx-auto flex h-[calc(100vh-4rem)] max-w-4xl flex-col px-4 py-6">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto rounded-lg border-2 border-border/40 bg-card/50 p-4 shadow-inner">
-            <div className="space-y-6">
-              {messages.map((m) => (
-                <MessageBubble key={m.id} message={m} />
-              ))}
-              {isTyping && (
-                <p className="text-sm text-muted-foreground">
-                  काल AI is reflecting...
-                </p>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
+          <div className="flex-1 overflow-y-auto rounded-lg border p-4">
+            {messages.map((m) => (
+              <MessageBubble
+                key={m.id}
+                message={m}
+                onPlay={(text) => speak(text)}
+              />
+            ))}
+            {isTyping && (
+              <p className="text-sm text-muted-foreground">
+                काल AI is reflecting...
+              </p>
+            )}
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Input */}
-          <div className="mt-4 rounded-lg border-2 border-border/60 bg-card p-4 shadow-md">
-            <div className="flex gap-2">
-              {/* 🎙️ MIC */}
-              <Button
-                type="button"
-                size="icon"
-                variant={recording ? "destructive" : "outline"}
-                onClick={async () => {
-                  if (!recording) {
-                    await startRecording()
-                  } else {
-                    const text = await stopRecording()
-                    if (text) setInput(text)
-                  }
-                }}
-                className="h-11 w-11"
-              >
-                {recording ? "⏹️" : "🎙️"}
-              </Button>
+          <div className="mt-4 flex gap-2">
+            <Button
+              size="icon"
+              variant={recording ? "destructive" : "outline"}
+              onClick={async () => {
+                if (!recording) await startRecording()
+                else {
+                  const text = await stopRecording()
+                  if (text) setInput(text)
+                }
+              }}
+            >
+              {recording ? "⏹️" : "🎙️"}
+            </Button>
 
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="What's on your mind today?"
-                className="flex-1 border-2"
-              />
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="What's on your mind?"
+            />
 
-              <Button
-                onClick={handleSend}
-                disabled={!input.trim() || isTyping}
-                size="icon"
-                className="h-11 w-11"
-              >
-                <Send className="h-5 w-5" />
-              </Button>
-            </div>
+            <Button onClick={handleSend}>
+              <Send className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </div>
@@ -178,39 +156,50 @@ export default function ChatPage() {
   )
 }
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({
+  message,
+  onPlay,
+}: {
+  message: Message
+  onPlay: (text: string) => void
+}) {
   const isUser = message.role === "user"
   const content = message.content
-  const { speak } = useTextToSpeech()
-
-  const textToSpeak =
-    typeof content === "string"
-      ? content
-      : content.guidance || content.acknowledgement
 
   return (
-    <div className={cn("flex items-start gap-3", isUser && "justify-end")}>
-      {!isUser && (
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-lg">
-          🕉️
-        </div>
+    <div
+      className={cn(
+        "flex w-full mb-4",
+        isUser ? "justify-end" : "justify-start"
       )}
+    >
+      <div
+        className={cn(
+          "max-w-[68%] rounded-2xl px-4 py-3 leading-relaxed",
+          isUser
+            ? "bg-orange-500 text-white rounded-br-sm"
+            : "bg-white border border-border/40 text-foreground rounded-bl-sm"
+        )}
+      >
+        {typeof content === "string" ? (
+          <p className="text-sm">{content}</p>
+        ) : (
+          <div className="space-y-2">
+            <p className="font-medium text-sm">
+              {content.acknowledgement}
+            </p>
 
-      <div className="max-w-[85%] rounded-2xl p-4 border-2 space-y-2">
-        <p className="text-sm">
-          {typeof content === "string"
-            ? content
-            : content.acknowledgement}
-        </p>
+            <p className="text-sm text-muted-foreground">
+              {content.guidance}
+            </p>
 
-        {!isUser && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => speak(textToSpeak)}
-          >
-            🔊 Play Voice
-          </Button>
+            <button
+              onClick={() => onPlay(content.guidance)}
+              className="text-xs text-orange-600 hover:underline mt-1"
+            >
+              🔊 Listen
+            </button>
+          </div>
         )}
       </div>
     </div>
